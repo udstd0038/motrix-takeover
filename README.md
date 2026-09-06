@@ -22,15 +22,50 @@ English | [简体中文](./README.zh-CN.md)
 > #    about:debugging#/runtime/this-firefox -> "Load Temporary Add-on"
 > #    -> select dist/firefox/manifest.json
 >
-> # 4. In Motrix (2.0.0-beta.32):
-> #    Settings -> Integration -> Browser extensions ->
-> #    Trusted extensions -> Add extension -> ID `motrix-takeover@local.dev`, browser Firefox
+> # 4. (Optional) In Motrix: Settings -> Integration -> Browser extensions ->
+> #    Trusted extensions -> Add extension -> ID `motrix-takeover@local.dev`,
+> #    browser Firefox. Verified against Motrix 2.0.0-beta.32: this step is NOT
+> #    required for pairing — non-allowlisted attested identities pair normally
+> #    and show as `attested-non-official`.
 >
 > # 5. Pair: click the toolbar icon -> Connect -> enter the 8-character code
 > #    shown in Motrix. Then enable Takeover in Settings -> Download.
 > ```
 >
 > Remove again with `.\scripts\register-nm-host.ps1 -Unregister`.
+>
+> ## Verified end-to-end against Motrix 2.0.0-beta.32 (2026-09)
+>
+> Every link of the chain has been proven on a real machine (Windows 11,
+> Firefox 154, Motrix 2.0.0-beta.32 at `D:\Program Files\Motrix`):
+>
+> - **Native messaging**: Firefox registry discovery → `motrix-native-host.exe`
+>   spawn → `requestPair {port, nonce}` reply, verified both by direct host
+>   invocation (`scripts/test-nm-bootstrap.mjs`) and from a real extension page
+>   context (`devtools/test-nm.*`).
+> - **MBP1 pairing**: full SPAKE2 first-pair (pairHello → pairAccept → pakeA/B →
+>   confirmA/B → credential commit), verified twice — once by the reference
+>   Node client (`scripts/test-mbp1-full-pair.mjs`, validated byte-for-byte
+>   against the official normative vectors first) and once by the REAL
+>   extension background worker driven through its own MessageBus
+>   (`devtools/test-pair.*`; final state `connected`).
+> - **MDXP + download**: `motrix/initialize` against server
+>   `motrix 2.0.0-beta.32`, then `download/submit` — a real file was downloaded
+>   by Motrix/aria2 to disk (`motrix-e2e-probe.ico`).
+> - **Takeover**: with Takeover enabled, a real Firefox download
+>   (`proof.ovh 1Mb.dat`) was intercepted on `downloads.onCreated`, cancelled in
+>   Firefox, and completed by Motrix (`D__Users_Downloads_1Mb.dat` — Motrix's
+>   filename sanitization of Firefox's full-path `DownloadItem.filename` is
+>   the tell-tale). Firefox's own `1Mb.dat` never existed.
+> - Pairing records on the Motrix side:
+>   `%APPDATA%\Motrix\bridge\extension-pairings.json` → `browser: firefox`,
+>   `identityTrust: attested-non-official`, `status: ready`.
+>
+> The pairing approval dialog's 8-character code is the PAKE password; key
+> confirmation itself settles the prompt server-side (no separate approve
+> click). The `scripts/` and `devtools/` folders contain the full automation
+> harness used for this verification (CDP dialog reading, UIA fallbacks, the
+> vector-validated MBP1 client).
 
 Send downloads from your browser to [Motrix](https://motrix.app), then check their progress and manage the tasks from the same small window. The extension can also find video, audio, and images loaded by the current page so you can choose what to save.
 
