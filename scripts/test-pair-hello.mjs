@@ -80,8 +80,10 @@ function frameJson(obj) {
     console.log('SERVER:', JSON.stringify(msg));
     if (msg.type === 'pairAccept') {
       console.log('OK: pairHello admitted, approval dialog queued (identity: attested-non-official)');
-      // Close to abort the dialog and free the single dialog slot.
-      setTimeout(() => { ws.close(); process.exit(0); }, 500);
+      // HOLD_MS keeps the dialog alive for external inspection (UIA reads);
+      // otherwise abort quickly to free the single dialog slot.
+      const holdMs = Number(process.env.HOLD_MS ?? 0);
+      setTimeout(() => { ws.close(); process.exit(0); }, holdMs > 0 ? holdMs : 500);
     } else if (msg.type === 'pairError') {
       fail('pairError ' + msg.code);
     }
