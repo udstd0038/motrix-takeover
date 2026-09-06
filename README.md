@@ -66,7 +66,7 @@ The security properties (fake-server resistance, replay protection, strict seque
 ### 1. Build the Firefox package
 
 ```bash
-git clone <this-repo-url> motrix-takeover
+git clone https://github.com/udstd0038/motrix-takeover.git motrix-takeover
 cd motrix-takeover
 pnpm install --frozen-lockfile
 pnpm run build:firefox

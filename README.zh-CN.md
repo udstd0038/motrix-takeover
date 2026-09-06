@@ -66,7 +66,7 @@
 ### 1. 构建 Firefox 包
 
 ```bash
-git clone <本仓库地址> motrix-takeover
+git clone https://github.com/udstd0038/motrix-takeover.git motrix-takeover
 cd motrix-takeover
 pnpm install --frozen-lockfile
 pnpm run build:firefox
