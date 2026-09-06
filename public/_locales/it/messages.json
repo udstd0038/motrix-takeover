@@ -1,7 +1,7 @@
 {
   "appName": {
-    "message": "Estensione Motrix",
-    "description": "Extension name shown in the browser and in store listings."
+    "message": "Motrix Takeover",
+    "description": "Extension name shown in the browser (community fork of the official Motrix extension)."
   },
   "appDescription": {
     "message": "Invia i download a Motrix",

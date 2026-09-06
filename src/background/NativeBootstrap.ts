@@ -75,12 +75,12 @@ export class NativeBootstrapError extends Error {
   }
 }
 
-// Must match the `name` field Motrix's NativeMessagingInstaller
-// writes into the chrome NM manifest. The Plan 03a docs originally
-// quoted `app.motrix.bridge`, but the actual installer uses
-// `app.motrix.bridge` — verified in Motrix at
-// src/main/bridge/NativeMessagingInstaller.ts (MANIFEST_HOST_NAME).
-const DEFAULT_HOST_NAME = 'app.motrix.bridge'
+// Community fork uses its own native-messaging host name so the official
+// extension's registration is never touched. The manifest (written by
+// scripts/register-nm-host.ps1) still points at Motrix's shipped
+// `motrix-native-host` binary — the host name is only a lookup key, the
+// binary itself reads endpoint.json and speaks the same wire contract.
+const DEFAULT_HOST_NAME = 'app.motrix.bridge.takeover'
 const DEFAULT_TIMEOUT_MS = 20_000 // must exceed native host's 15s launch poll
 const MAX_NONCE_LENGTH = 512
 

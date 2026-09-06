@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import manifestConfig from '#manifest-config'
 
-// Cross-repo contract: the Motrix desktop app allowlists this exact ID in
-// Motrix/src/shared/config/native-messaging-extensions.json (mirrored by a
-// test there). Native messaging on Firefox only works while both sides agree,
-// so changing the ID here requires changing the desktop allowlist in the same
-// release — and vice versa.
-const STORE_SIGNED_GECKO_ID = 'motrix-extension@motrix.app'
+// Community fork identity. This ID is NOT in Motrix's built-in official
+// allowlist, so Motrix will show the extension as `attested-non-official`
+// (NM ticket proves the caller ID, but it is not the official ID). The user
+// must add this ID once under Settings → Integration → Browser extensions →
+// Trusted extensions in Motrix. The native-messaging manifest must also list
+// this exact ID in `allowed_extensions`.
+const STORE_SIGNED_GECKO_ID = 'motrix-takeover@local.dev'
 
 describe('manifest identity', () => {
   it('declares the store-signed Gecko ID for Firefox builds', async () => {

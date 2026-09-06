@@ -1,6 +1,36 @@
-# Motrix Browser Extension
+# Motrix Takeover (community fork of motrixapp/motrix-extension)
 
 English | [简体中文](./README.zh-CN.md)
+
+> Community fork built on the MIT-licensed [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension) with all features preserved. Differences from upstream:
+>
+> - **Gecko ID**: `motrix-takeover@local.dev` (upstream: `motrix-extension@motrix.app`). Motrix therefore shows this extension as `attested-non-official` — add the ID once under **Settings → Integration → Browser extensions → Trusted extensions** (browser: Firefox).
+> - **Native-messaging host name**: `app.motrix.bridge.takeover` (upstream: `app.motrix.bridge`). Both point at Motrix's shipped `motrix-native-host` binary; the distinct name keeps the official extension's registration untouched.
+> - Display name: **Motrix Takeover** (all locales).
+>
+> ## Windows setup (one-time)
+>
+> ```powershell
+> # 1. Register the native-messaging host (points at Motrix's own binary)
+> powershell -ExecutionPolicy Bypass -File .\scripts\register-nm-host.ps1
+>
+> # 2. Build the Firefox variant (Node >= 22.13, pnpm 11)
+> pnpm install --frozen-lockfile
+> pnpm run build:firefox
+>
+> # 3. Load in Firefox
+> #    about:debugging#/runtime/this-firefox -> "Load Temporary Add-on"
+> #    -> select dist/firefox/manifest.json
+>
+> # 4. In Motrix (2.0.0-beta.32):
+> #    Settings -> Integration -> Browser extensions ->
+> #    Trusted extensions -> Add extension -> ID `motrix-takeover@local.dev`, browser Firefox
+>
+> # 5. Pair: click the toolbar icon -> Connect -> enter the 8-character code
+> #    shown in Motrix. Then enable Takeover in Settings -> Download.
+> ```
+>
+> Remove again with `.\scripts\register-nm-host.ps1 -Unregister`.
 
 Send downloads from your browser to [Motrix](https://motrix.app), then check their progress and manage the tasks from the same small window. The extension can also find video, audio, and images loaded by the current page so you can choose what to save.
 

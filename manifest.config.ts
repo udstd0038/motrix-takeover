@@ -99,7 +99,7 @@ export default defineManifest((env) => {
           },
           browser_specific_settings: {
             gecko: {
-              id: 'motrix-extension@motrix.app',
+              id: 'motrix-takeover@local.dev',
               // Firefox 140 introduced the built-in data-transmission consent
               // experience on desktop, while Firefox for Android gained the
               // same manifest support in 142. Use the shared floor so AMO does
