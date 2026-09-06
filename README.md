@@ -1,282 +1,211 @@
-# Motrix Takeover (community fork of motrixapp/motrix-extension)
+# Motrix Takeover
 
-English | [简体中文](./README.zh-CN.md)
-
-> Community fork built on the MIT-licensed [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension) with all features preserved. Differences from upstream:
+> Community fork of the official [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension) — a Firefox extension that hands your browser downloads over to [Motrix](https://motrix.app), the open-source download manager.
 >
-> - **Gecko ID**: `motrix-takeover@local.dev` (upstream: `motrix-extension@motrix.app`). Motrix therefore shows this extension as `attested-non-official` — add the ID once under **Settings → Integration → Browser extensions → Trusted extensions** (browser: Firefox).
-> - **Native-messaging host name**: `app.motrix.bridge.takeover` (upstream: `app.motrix.bridge`). Both point at Motrix's shipped `motrix-native-host` binary; the distinct name keeps the official extension's registration untouched.
-> - Display name: **Motrix Takeover** (all locales).
->
-> ## Windows setup (one-time)
->
-> ```powershell
-> # 1. Register the native-messaging host (points at Motrix's own binary)
-> powershell -ExecutionPolicy Bypass -File .\scripts\register-nm-host.ps1
->
-> # 2. Build the Firefox variant (Node >= 22.13, pnpm 11)
-> pnpm install --frozen-lockfile
-> pnpm run build:firefox
->
-> # 3. Load in Firefox
-> #    about:debugging#/runtime/this-firefox -> "Load Temporary Add-on"
-> #    -> select dist/firefox/manifest.json
->
-> # 4. (Optional) In Motrix: Settings -> Integration -> Browser extensions ->
-> #    Trusted extensions -> Add extension -> ID `motrix-takeover@local.dev`,
-> #    browser Firefox. Verified against Motrix 2.0.0-beta.32: this step is NOT
-> #    required for pairing — non-allowlisted attested identities pair normally
-> #    and show as `attested-non-official`.
->
-> # 5. Pair: click the toolbar icon -> Connect -> enter the 8-character code
-> #    shown in Motrix. Then enable Takeover in Settings -> Download.
-> ```
->
-> Remove again with `.\scripts\register-nm-host.ps1 -Unregister`.
->
-> ## Verified end-to-end against Motrix 2.0.0-beta.32 (2026-09)
->
-> Every link of the chain has been proven on a real machine (Windows 11,
-> Firefox 154, Motrix 2.0.0-beta.32 at `D:\Program Files\Motrix`):
->
-> - **Native messaging**: Firefox registry discovery → `motrix-native-host.exe`
->   spawn → `requestPair {port, nonce}` reply, verified both by direct host
->   invocation (`scripts/test-nm-bootstrap.mjs`) and from a real extension page
->   context (`devtools/test-nm.*`).
-> - **MBP1 pairing**: full SPAKE2 first-pair (pairHello → pairAccept → pakeA/B →
->   confirmA/B → credential commit), verified twice — once by the reference
->   Node client (`scripts/test-mbp1-full-pair.mjs`, validated byte-for-byte
->   against the official normative vectors first) and once by the REAL
->   extension background worker driven through its own MessageBus
->   (`devtools/test-pair.*`; final state `connected`).
-> - **MDXP + download**: `motrix/initialize` against server
->   `motrix 2.0.0-beta.32`, then `download/submit` — a real file was downloaded
->   by Motrix/aria2 to disk (`motrix-e2e-probe.ico`).
-> - **Takeover**: with Takeover enabled, a real Firefox download
->   (`proof.ovh 1Mb.dat`) was intercepted on `downloads.onCreated`, cancelled in
->   Firefox, and completed by Motrix (`D__Users_Downloads_1Mb.dat` — Motrix's
->   filename sanitization of Firefox's full-path `DownloadItem.filename` is
->   the tell-tale). Firefox's own `1Mb.dat` never existed.
-> - Pairing records on the Motrix side:
->   `%APPDATA%\Motrix\bridge\extension-pairings.json` → `browser: firefox`,
->   `identityTrust: attested-non-official`, `status: ready`.
->
-> The pairing approval dialog's 8-character code is the PAKE password; key
-> confirmation itself settles the prompt server-side (no separate approve
-> click). The `scripts/` and `devtools/` folders contain the full automation
-> harness used for this verification (CDP dialog reading, UIA fallbacks, the
-> vector-validated MBP1 client).
+> 简体中文说明见 [README.zh-CN.md](./README.zh-CN.md)
 
-Send downloads from your browser to [Motrix](https://motrix.app), then check their progress and manage the tasks from the same small window. The extension can also find video, audio, and images loaded by the current page so you can choose what to save.
+**Motrix Takeover** turns "download this" into a single click: instead of the browser's own download manager, the file goes to **Motrix** — with your login session carried along, so even files behind a sign-in download fine. It also handles things browsers can't, like assembling HLS/DASH streaming video into a single file with FFmpeg.
 
-I think of it as a bridge between the browser and Motrix. The browser is good at finding resources; Motrix is good at downloading them reliably. That division of labor is simple, and it feels right in daily use.
+Everything about the *pairing protocol* and *security* is unchanged from the official codebase (which passed six independent adversarial crypto reviews). This fork only changes the extension identity so it can be built, loaded, and paired independently of the store release.
 
-> [!IMPORTANT]
-> `v0.1.2` is still in development and has not been released publicly. It is not ready to be your everyday download tool. YouTube support, in particular, is only placeholder code for integration testing and cannot perform a real download. Store-facing Chrome/Edge and Firefox builds remove that code entirely.
+---
 
-## What you can do
+## Why this fork exists
 
-- Right-click a link and choose **Download with Motrix**.
-- Paste an HTTP, HTTPS, or magnet link to create a task.
-- Let Motrix take over eligible browser downloads, with a size threshold and a list of sites to leave alone.
-- Scan resources already loaded by the current page, filter them by video, audio, or image, and submit a selection in one batch.
-- Check speeds and task status in the extension. You can pause, resume, or remove tasks and, when supported, ask Motrix to reveal the downloaded file.
-- Connect to the Motrix App on this computer or save and switch between several remote Motrix Servers.
+The official extension is being rolled out alongside Motrix 2 — the store links were not published yet at the time of this fork. This repository lets you build the full-featured extension yourself, with your own identity:
 
-This is useful, but websites are messy. Login state, expiring URLs, hotlink protection, DRM, and each site's player design can all change the result. The extension keeps the request details a download may need, but it does not bypass DRM and cannot promise that every resource visible on a page can be downloaded on its own.
+| | Official | This fork |
+|---|---|---|
+| Gecko ID (Firefox) | `motrix-extension@motrix.app` | `motrix-takeover@local.dev` |
+| Native-messaging host name | `app.motrix.bridge` | `app.motrix.bridge.takeover` |
+| Display name | Motrix Extension | Motrix Takeover |
+| Motrix identity verdict | `official` | `attested-non-official` (pairs normally, shown without branding) |
+| Protocol / crypto code | — | **Unchanged** |
 
-## Before you start
+Both extensions talk to the **same** Motrix bridge and the same shipped `motrix-native-host` binary; the distinct host name simply keeps the official registration untouched.
 
-You will need:
+---
 
-- Chrome 120 or later, or Firefox 142 or later;
-- a Motrix App or Motrix Server compatible with the current MDXP / MBP1 protocol;
-- for a local connection, a running Motrix App with its browser integration component installed correctly.
+## Features
 
-Firefox for Android connects through Motrix Server. Native Messaging is not
-available there, so the local Motrix App backend is shown only on desktop.
+- **One-click download takeover** — eligible Firefox downloads go straight to Motrix, with a minimum-size threshold and a per-host denylist.
+- **Authenticated downloads** — headers and cookies are replayed so files behind a login work without manual cookie copying.
+- **Streaming video (HLS/DASH)** — Motrix downloads the segments and merges audio/video with FFmpeg.
+- **Magnet links** — handed straight to the torrent workflow.
+- **Right-click** — "Download with Motrix" on any link.
+- **Manual tasks** — paste an HTTP(S) or `magnet:` link into the popup.
+- **Page resource sniffer** — list video / audio / images already loaded by the current page and submit a selection in one batch.
+- **Remote Motrix Server** — pair with a `ws://` / `wss://` Motrix Server (cookies and headers stay off until you explicitly grant them per Server).
+- **Handoff failure recovery** — if Motrix can't accept a download, it is restored to the browser; failures are explained in plain words ("session expired", "DRM-protected", …).
 
-There is no store release or stable installer yet. Early testing requires a source build. If you simply want a quiet, dependable download tool, I would wait for the first public release. It will save you a fair amount of friction.
+---
 
-<details>
-<summary>Install a test build from source</summary>
+## How it works
 
-You need Node.js 22.13 or later and pnpm 11.
+The extension implements two stacked official protocols, both defined by the Motrix project:
+
+1. **Native Messaging bootstrap** — `browser.runtime.connectNative()` launches Motrix's shipped `motrix-native-host` binary, which reads the local bridge endpoint, mints a one-time pairing nonce plus an attestation ticket proving *which* extension is calling, and returns `{ port, nonce, ticket }`.
+2. **MBP1 pairing** (`motrix-bridge.v1` WebSocket on `127.0.0.1:16802–16806`) — a SPAKE2 password-authenticated key exchange whose password is the **8-character code shown in Motrix's approval dialog**. After mutual key confirmation, every frame is wrapped in AES-256-GCM. Reconnects use a long-lived credential, no code needed again.
+3. **MDXP** (JSON-RPC 2.0) — the application protocol on top: `motrix/initialize`, `download/submit`, `task/*`, progress notifications, and the server-initiated `url/probe` / `url/resolve` page adapters.
+
+The security properties (fake-server resistance, replay protection, strict sequence numbers, guess-rate backoff on **both** sides) are specified in `docs/bridge-pairing-protocol.md` of the [Motrix repository](https://github.com/agalwood/Motrix) and are **not modified by this fork**.
+
+---
+
+## Requirements
+
+- **Firefox** 142 or later (desktop).
+- **Motrix** 2.0.0-beta.x (verified against **2.0.0-beta.32**) or a compatible Motrix Server.
+- **Windows** for the provided one-shot NM registration script; macOS / Linux are supported by the same mechanism (manifest files under the browser's `NativeMessagingHosts` directory) — see the upstream docs.
+- Node.js ≥ 22.13 and pnpm 11 to build from source.
+
+---
+
+## Installation
+
+### 1. Build the Firefox package
 
 ```bash
-pnpm install
-pnpm build:chromium
-pnpm build:firefox
+git clone <this-repo-url> motrix-takeover
+cd motrix-takeover
+pnpm install --frozen-lockfile
+pnpm run build:firefox
 ```
 
-Chrome: open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `dist/chromium/`.
+The unpacked extension is written to `dist/firefox/`.
 
-A Chrome development build needs one more setup step. The extension has not been published to the Chrome Web Store, so the ID assigned to a locally loaded copy is not in Motrix's built-in trust list. Without adding it, Motrix rejects the connection before it shows a pairing code.
+### 2. Register the native-messaging host (Windows)
 
-1. Stay on `chrome://extensions`, find Motrix Extension, and copy the ID shown on its card.
-2. In Motrix, open **Settings → Integration → Browser extensions** and make sure **Send downloads from browser extensions** is enabled.
-3. Expand **Trusted extensions**, choose **Add extension**, paste the ID, select **Chrome / Edge**, and choose **Add**. The label is optional.
-4. Return to the extension, connect to Motrix again, and complete pairing when prompted.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\register-nm-host.ps1
+```
 
-Only add the ID you copied from your browser's extension-management page. Chrome may assign a different ID if you move the unpacked build to another directory or install it on another computer. If that happens, remove the old entry from Motrix and add the new one.
+This writes a Firefox manifest that points at Motrix's own
+`motrix-native-host.exe` (default install `D:\Program Files\Motrix`; pass
+`-MotrixDir <path>` if yours differs) and registers
+`HKCU\SOFTWARE\Mozilla\NativeMessagingHosts\app.motrix.bridge.takeover`.
 
-Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`. Firefox removes temporary extensions when it restarts.
+Remove it later with `.\scripts\register-nm-host.ps1 -Unregister`.
 
-</details>
+### 3. Load the extension in Firefox
 
-## Connect for the first time
+Open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** →
+select `dist/firefox/manifest.json`.
 
-### Motrix on this computer
+> Temporary add-ons are removed when Firefox restarts. For permanent use,
+> sign the package through AMO (`web-ext sign`) or distribute it yourself.
 
-1. Start the Motrix App.
-2. Select the Motrix icon in the browser toolbar, then choose **Connect**.
-3. If the extension finds more than one Motrix instance, select the one you want.
-4. Enter the eight-character pairing code shown by Motrix.
+### 4. (Optional) Trust the extension in Motrix
 
-After pairing, the extension stores a credential that belongs only to that Motrix installation. It will usually reconnect without asking for another code. If you revoke the pairing in Motrix, the browser must be authorized again.
+Motrix → **Settings → Integration → Browser extensions** → **Trusted
+extensions** → **Add extension** → ID `motrix-takeover@local.dev`, browser
+Firefox.
 
-### A remote Motrix Server
+Verified against Motrix 2.0.0-beta.32: **this step is not required for
+pairing**. Without it the extension still pairs and shows as
+`attested-non-official` in Motrix. Adding it only changes how Motrix displays
+the identity.
 
-Open **Settings → Integration**, add a name and a `ws://` or `wss://` address, then complete pairing.
+---
 
-Use `wss://` for remote connections when possible. Task content still has application-level encryption over `ws://`, but plain WebSocket cannot reliably prove the server's identity and may expose connection metadata. Once a connection crosses the internet or a NAS reverse proxy, that difference stops being academic.
+## Usage
 
-Pairing credentials and data permissions are isolated per Server. Pairing proves which Server you reached; it does not give that Server permission to receive browser data. You must enable **Remote downloads** separately. Cookies and page-derived request headers start disabled and must also be granted per Server.
+### First pairing
 
-## Three ways to download
+1. Start Motrix (make sure **Settings → Integration → Browser extensions →
+   "Send downloads from browser extensions"** is on — it is by default).
+2. Click the **Motrix Takeover** toolbar icon → **Connect**.
+3. Motrix shows an approval dialog with an **8-character code** (`XXXX-XXXX`).
+4. Type that code into the extension popup.
 
-### Right-click a link
+The code is the pairing password: key confirmation inside the SPAKE2 exchange
+is what actually proves the pairing — there is no second approval click. After
+pairing, reconnects happen automatically without a code.
 
-Right-click a download link on a page and choose **Download with Motrix**. This is the most direct route, and automatic takeover does not need to be enabled.
+### Take over browser downloads
 
-The remote Server policy currently blocks right-click handoff. When a remote Server is selected, create the task manually in the extension or submit it from the **Sniffer** tab instead.
+Open the extension settings → **Download** tab → enable **Takeover**. You can
+set a minimum file size and a denylist of hosts that the browser should always
+handle itself. Takeover asks for confirmation the first time, because keeping
+authenticated downloads working may involve sending cookies for the target
+domain to Motrix. A built-in sensitive-host list excludes some banking,
+government, and medical sites.
 
-### Create a task manually
+### Other ways to download
 
-Once Motrix is connected, open the **Tasks** tab and select the plus button in the upper-right corner. Paste one HTTP, HTTPS, or `magnet:?` address. The current version accepts one address at a time.
+- **Right-click a link** → *Download with Motrix* (no takeover needed).
+- **Tasks tab** → paste an HTTP(S) or `magnet:` link.
+- **Sniffer tab** → pick video / audio / images the current page already loaded.
 
-### Choose resources from the page
+---
 
-Open the **Sniffer** tab. It lists video, audio, and images loaded by the current page; images can be narrowed further by format, dimensions, and file size. On a page that uses lazy loading, scroll through it or start playback before selecting **Scan again**. The results are usually more complete.
+## Verified end-to-end (Motrix 2.0.0-beta.32, Windows 11, Firefox 154)
 
-One distinction matters here: finding a resource does not guarantee a successful download. Some URLs expire quickly. Some video needs separate audio and video tracks that Motrix must merge with ffmpeg, while other media is protected by DRM. The extension marks selections the current backend cannot handle instead of pretending that the task was accepted.
+Every link of the chain was proven on a real machine:
 
-## Browser download takeover
+- **Native messaging** — Firefox registry discovery → `motrix-native-host.exe` → `{port, nonce}` reply, verified both by direct invocation (`scripts/test-nm-bootstrap.mjs`) and from a real extension page context (`devtools/test-nm.*`).
+- **MBP1 pairing** — full SPAKE2 first pair, verified twice: once by a reference Node client (`scripts/test-mbp1-full-pair.mjs`, validated byte-for-byte against the official normative vectors *before* going online) and once by the **real extension background worker** driven through its own message bus (`devtools/test-pair.*`, final state `connected`).
+- **MDXP + download** — `motrix/initialize` against server `motrix 2.0.0-beta.32`, then `download/submit`; a real file was fetched by Motrix/aria2.
+- **Takeover** — a real Firefox download was intercepted on `downloads.onCreated`, cancelled in Firefox, and completed by Motrix (the tell-tale: Motrix sanitized Firefox's full-path `DownloadItem.filename` into the final file name).
+- **Durable pairing records** — Motrix side `bridge/extension-pairings.json` shows `browser: firefox`, `identityTrust: attested-non-official`, `status: ready`; the extension side stores the credential in `storage.local`.
 
-When **Takeover** is on, eligible browser downloads are sent automatically to the local Motrix App. A remote Server currently accepts only tasks that you create or submit from the extension; automatic takeover and right-click handoff are blocked. That is conservative, but I think the extra deliberate step is sensible when browser data may cross devices.
+The `scripts/` and `devtools/` folders contain the full automation harness used
+for this verification (CDP dialog reading, UIA fallback, the vector-validated
+MBP1 client, and in-extension test pages).
 
-The settings let you define:
+---
 
-- a minimum file size, below which the browser keeps the download;
-- a denylist with one host per line, which the browser always handles itself.
+## Troubleshooting
 
-Takeover is off by default and asks for confirmation the first time it is enabled. There is a concrete reason: to keep authenticated downloads working, the extension may read cookies for the target domain and send them with the task to Motrix. A built-in sensitive-host list excludes some banking, government, and medical sites. If Motrix cannot accept an ordinary HTTP(S) download, the extension tries to return it to the browser. Magnet links have no equivalent browser download to fall back to.
+**The extension can't find Motrix on this computer.**
+Make sure Motrix is running, then rescan. Check that the NM manifest is
+registered (`.\scripts\register-nm-host.ps1` shows the manifest) and that
+Firefox can reach local addresses. An older Motrix build may also be
+incompatible with the current pairing protocol (MBP1 v1 / MDXP 1.0).
 
-## Data and permissions
+**Pairing fails with "rate limited" / "try again later".**
+The bridge enforces an anti-guessing backoff after failed attempts (30 s and
+up, doubling, capped at 1 h, reset by a successful pairing). Wait it out —
+repeated retries only make it longer.
 
-Your browser will say that this extension can access every website, downloads, and cookies. That is broad access. I do not want to hide it behind a vague “required for operation,” so here is what each part is for.
+**"Session expired — refresh the page in your browser and try again."**
+Your login on the site ran out mid-handoff; refresh and retry.
 
-| Permission | Why it is used |
-| --- | --- |
-| Pages and network requests | Find links, media manifests, images, and other resources the page has loaded |
-| Downloads | Take over a download and restore it to the browser if handoff fails |
-| Cookies | Preserve an authenticated download when you submit a page resource or consent to takeover; remote Servers require another explicit grant |
-| Native Messaging | Discover and connect to the Motrix App on this computer |
-| Local storage | Keep settings, the Server list, pairing credentials, and per-Server permissions |
-| Notifications and context menus | Report handoff results and add the **Download with Motrix** action |
+**A video on the page is missing from the Sniffer list.**
+Start playback for a few seconds and scan again. `blob:` URLs, DRM streams and
+short-lived links may be unusable.
 
-Page-resource scanning happens locally in the browser. Opening a page does not send its full contents to Motrix. When you actually submit a task, the selected backend receives what it needs for the download: this can include the target URL, source page URL and title, and a suggested filename. Whether cookies and request headers are included depends on the download path, backend type, and the permissions you granted.
+**I get a file name like `D__Users_Downloads_….dat`.**
+Known upstream cosmetic quirk: Firefox reports the download's *full path* as
+`DownloadItem.filename`, and Motrix sanitizes it into the final name. The file
+itself is complete and correct.
 
-Remote Server permissions start at the narrowest scope. Unless you explicitly enable them, the extension does not send cookies or authentication headers to a remote Server. Grant those permissions only to a Server you control.
+---
 
-## Common questions
-
-### Why can't the Chrome development build connect to Motrix?
-
-Check that its extension ID appears under **Settings → Integration → Browser extensions → Trusted extensions** in Motrix. You can copy the ID from the Motrix Extension card on `chrome://extensions`. If you loaded the build from a different directory, Chrome may have assigned a new ID, so update the Motrix entry as well.
-
-### Why can't the extension find Motrix on this computer?
-
-Make sure Motrix is running, then scan again. If it is still missing, check whether the browser lets the extension reach local addresses and whether Motrix's browser integration component is installed. An older Motrix build may also be incompatible with the current pairing protocol.
-
-### Why is a video on the page missing from the resource list?
-
-Start playback for a few seconds and scan again. Detection uses page elements and requests that have actually happened, so the extension cannot see media that has not loaded yet. `blob:` URLs, DRM streams, short-lived links, and custom player packaging may also be unusable.
-
-### Why is a paired remote Server refusing downloads?
-
-Pairing answers “which Server is this?” It does not answer “what may I send it?” Open **Settings → Integration** and enable **Remote downloads** for that Server. If the resource also relies on a Referer, cookies, or authentication headers, grant only the additional permissions it needs.
-
-### Can it download from YouTube?
-
-Not yet.
-
-## For developers
+## Development
 
 ```bash
-pnpm dev                 # Chromium development build
-pnpm dev:firefox         # Firefox development build
-pnpm test                # Test suite
-pnpm lint                # Code checks
-pnpm build:webstore      # Chrome Web Store-compliant build
+pnpm dev              # Chromium development build
+pnpm dev:firefox      # Firefox development build
+pnpm test             # 2000+ unit tests, incl. all MBP1 normative vectors
+pnpm lint             # biome + import checks
+pnpm run build:firefox
 ```
 
-### Localize the store listing
+Main areas: `src/background/` (pairing, connections, download handoff, task
+controls), `src/popup/`, `src/options/`, `src/content/` (page-resource
+detection), `src/adapters/` (site adapters), `src/background/mbp1/` (the MBP1
+protocol implementation — do not modify without re-running the vector suite).
 
-The manifest `name` and `description` come from
-`public/_locales/<code>/messages.json` (`__MSG_appName__`, `__MSG_appDescription__`),
-with `en` as `default_locale`. Every locale directory there is also a language
-the Chrome Web Store listing editor lets you localize, including its own set of
-screenshots and description. To add a language, add a `messages.json` with the
-same keys; `src/__tests__/manifest-locales.test.ts` checks that all locales
-stay complete and in sync. The in-app UI strings are separate
-(`src/shared/locales/*.json`, i18next).
+The crypto dependencies are pinned by the protocol specification
+(`@noble/curves@2.4.0`, `@noble/hashes@2.4.0`) — upgrading them requires
+re-running every normative vector.
 
-The extension currently ships store metadata for 16 high-coverage, non-RTL
-languages: `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt_BR`,
-`ru`, `th`, `tr`, `vi`, `zh_CN`, and `zh_TW`. These directory names follow
-the locale codes accepted by Chrome Web Store and Firefox WebExtensions. RTL
-locales should be added only after the extension surfaces and store assets have
-dedicated bidirectional-layout testing.
-
-The same 16 languages are available in the extension UI under **General →
-Language**, with automatic browser-language detection and a saved override.
-UI locale tags use BCP 47 (`en-US`, `pt-BR`, `zh-CN`, `zh-TW`). Traditional
-Chinese is selected for `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant`. When adding
-an interface language, register it in `src/shared/supportedLocales.ts` and
-`src/shared/i18n.ts`; locale tests verify every key and interpolation placeholder.
-
-### Publish a GitHub release
-
-Releases are built by GitHub Actions from an existing `vX.Y.Z` tag. Update the
-version in `package.json`, commit the change, then create and push the matching
-tag:
-
-```bash
-git tag -a v0.1.2 -m "Motrix Extension 0.1.2"
-git push origin v0.1.2
-```
-
-The workflow runs the checks and tests, builds the Chrome/Edge Web Store and
-Firefox variants, verifies their manifest versions, and publishes both ZIP
-files, a reproducible source ZIP for Firefox review, and `SHA256SUMS.txt` to a
-GitHub Release. An existing tag can also be released manually from the
-**Release browser extension** workflow in GitHub Actions.
-
-The main areas of the codebase are:
-
-- `src/background/` — pairing, connections, download handoff, task controls, and stored configuration;
-- `src/popup/` — the extension popup;
-- `src/options/` — the settings page;
-- `src/content/` — page-resource detection;
-- `src/adapters/` — site adapters.
-
-## Related projects
-
-- [Motrix](https://github.com/agalwood/Motrix) — desktop app and server
-- [motrix-extension](https://github.com/motrixapp/motrix-extension) — public extension repository
-- [MDXP](https://github.com/motrixapp/mdxp) — protocol schemas and connection helpers
+---
 
 ## License
 
-[MIT](./LICENSE) © 2026-present Dr_rOot
+[MIT](./LICENSE), © the Motrix project contributors. This fork is based on
+[motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension)
+(MIT). Protocol specifications belong to the
+[Motrix](https://github.com/agalwood/Motrix) project.

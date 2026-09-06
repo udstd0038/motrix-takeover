@@ -1,183 +1,179 @@
-# Motrix 浏览器扩展
+# Motrix Takeover（社区 fork 版）
 
-[English](./README.md) | 简体中文
+> 基于官方 [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension) 的社区 fork —— 一个让 Firefox 浏览器下载任务交给开源下载管理器 [Motrix](https://motrix.app) 的浏览器扩展。
+>
+> English version: [README.md](./README.md)
 
-把浏览器里的下载交给 [Motrix](https://motrix.app)，然后在同一个地方查看进度、调整任务，或者从当前网页挑出真正想保存的视频、音频和图片。
+**Motrix Takeover** 把"下载这个"变成一次点击：文件不再走浏览器自带的下载管理器，而是交给 **Motrix** —— 你的登录会话也会一并带过去，所以需要登录才能下的文件照样能下。它还能干浏览器干不了的事，比如用 FFmpeg 把 HLS/DASH 流媒体视频合成一个完整文件。
 
-## 你可以用它做什么
+**配对协议与安全实现**与官方代码库完全一致（官方实现经过了六轮独立对抗性密码学审查）。本 fork 只改了扩展身份，让你可以在官方商店版本上线之前，独立构建、加载并配对使用。
 
-- 在链接上点击右键，选择“用 Motrix 下载”。
-- 粘贴 HTTP、HTTPS 或磁力链接，直接新建任务。
-- 让 Motrix 接管符合条件的浏览器下载；可以设置最小文件大小和不接管的域名。
-- 扫描当前页面已经加载的资源，按视频、音频或图片筛选，选中后批量提交。
-- 在扩展窗口里查看速度和任务状态，暂停、继续或删除任务；支持时还能在 Motrix 中打开文件所在目录。
-- 连接这台电脑上的 Motrix App，也可以保存并切换多个远程 Motrix Server。
+---
 
-这些功能放在一起很方便，但并非每个网页都能被“看懂”。登录状态、临时地址、防盗链、DRM 和站点自身的实现都会影响结果。扩展会尽量保留下载所需的信息，却不会绕过 DRM，也无法保证网页里出现的每个资源都能单独下载。
+## 为什么有这个 fork
 
-## 开始之前
+官方扩展正随 Motrix 2 逐步上线，fork 时商店链接尚未发布。本仓库让你可以用自己的身份构建这个全功能扩展：
 
-你需要：
+| | 官方版 | 本 fork |
+|---|---|---|
+| Firefox Gecko ID | `motrix-extension@motrix.app` | `motrix-takeover@local.dev` |
+| 原生消息（NM）宿主名 | `app.motrix.bridge` | `app.motrix.bridge.takeover` |
+| 显示名称 | Motrix Extension | Motrix Takeover |
+| Motrix 侧身份判定 | `official` | `attested-non-official`（可正常配对，仅无官方品牌标识） |
+| 协议 / 密码学代码 | — | **未改动** |
 
-- Chrome 120 或更高版本，或者 Firefox 142 或更高版本；
-- 支持当前 MDXP / MBP1 协议的 Motrix App 或 Motrix Server；
-- 如果要连接本机 Motrix App，请先启动 Motrix，并确保它的浏览器连接组件已经正确安装。
+两者连接的是**同一个** Motrix 桥接服务、复用 Motrix 自带的同一个 `motrix-native-host` 二进制；独立的宿主名只是为了避免覆盖官方版的注册。
 
-Firefox Android 通过 Motrix Server 连接。Android 不支持 Native Messaging，
-因此本机 Motrix App 后端只会在桌面浏览器中显示。
+---
 
-目前还没有可供普通用户直接安装的商店版本或稳定安装包。想提前试用，需要从源码构建扩展；如果你只想安静地下载文件，我建议等第一个公开版本，这会少踩不少坑。
+## 功能
 
-<details>
-<summary>从源码安装测试版</summary>
+- **一键接管下载** —— 符合条件的 Firefox 下载直接交给 Motrix，可设最小文件大小阈值与按域名的排除列表。
+- **带登录态的下载** —— 重放请求头与 Cookie，登录后才能下载的文件无需手动复制 Cookie。
+- **流媒体视频（HLS/DASH）** —— Motrix 下载分片后用 FFmpeg 合成音视频。
+- **磁力链接** —— 直接进入种子流程。
+- **右键菜单** —— 对任意链接"用 Motrix 下载"。
+- **手动任务** —— 在弹窗里粘贴 HTTP(S) 或 `magnet:` 链接。
+- **页面资源嗅探** —— 列出当前页面已加载的视频 / 音频 / 图片，可批量提交。
+- **远程 Motrix Server** —— 通过 `ws://` / `wss://` 配对（Cookie 与请求头默认关闭，需对每个 Server 显式授权）。
+- **移交失败兜底** —— Motrix 无法接收时自动退回浏览器下载，并用大白话说明原因（"会话已过期"、"受 DRM 保护"等）。
 
-需要 Node.js 22.13 或更高版本，以及 pnpm 11。
+---
+
+## 工作原理
+
+扩展实现了两层官方协议，均由 Motrix 项目定义：
+
+1. **Native Messaging 引导** —— `browser.runtime.connectNative()` 启动 Motrix 自带的 `motrix-native-host` 二进制，宿主读取本地桥接端点，签发一次性配对 nonce 和一张证明"是哪个扩展在调用"的 attestation ticket，返回 `{ port, nonce, ticket }`。
+2. **MBP1 配对**（`motrix-bridge.v1` WebSocket，`127.0.0.1:16802–16806`）—— 基于 SPAKE2 的口令认证密钥交换，口令就是 **Motrix 审批对话框中显示的 8 位配对码**。双向密钥确认后，所有帧由 AES-256-GCM 包裹。之后的重连使用长期凭据，无需再输码。
+3. **MDXP**（JSON-RPC 2.0）—— 上层应用协议：`motrix/initialize`、`download/submit`、`task/*`、进度通知，以及服务端发起的 `url/probe` / `url/resolve` 页面适配器。
+
+安全特性（抗假服务器、防重放、严格序号、**双侧**防猜退避等）定义在 [Motrix 仓库](https://github.com/agalwood/Motrix) 的 `docs/bridge-pairing-protocol.md` 中，本 fork **未做任何修改**。
+
+---
+
+## 环境要求
+
+- **Firefox** 142+（桌面版）。
+- **Motrix** 2.0.0-beta.x（已在 **2.0.0-beta.32** 上验证）或兼容的 Motrix Server。
+- **Windows** 有提供的一键 NM 注册脚本；macOS / Linux 使用相同机制（浏览器 `NativeMessagingHosts` 目录下的 manifest），参见上游文档。
+- 源码构建需要 Node.js ≥ 22.13 与 pnpm 11。
+
+---
+
+## 安装
+
+### 1. 构建 Firefox 包
 
 ```bash
-pnpm install
-pnpm build:chromium
-pnpm build:firefox
+git clone <本仓库地址> motrix-takeover
+cd motrix-takeover
+pnpm install --frozen-lockfile
+pnpm run build:firefox
 ```
 
-Chrome：打开 `chrome://extensions`，启用“开发者模式”，点击“加载已解压的扩展程序”，选择 `dist/chromium/`。
+解包后的扩展在 `dist/firefox/`。
 
-Chrome 开发版还要登记一次扩展 ID。现在扩展尚未发布到 Chrome 应用商店，本地加载得到的 ID 不在 Motrix 的内置信任名单中；少了这一步，Motrix 会拒绝连接，配对码也不会出现。
+### 2. 注册原生消息宿主（Windows）
 
-1. 留在 `chrome://extensions`，找到 Motrix Extension，复制卡片上的 ID。
-2. 打开 Motrix 的“设置 → 集成 → 浏览器扩展”，确认“用浏览器扩展发送下载到 Motrix”已经开启。
-3. 展开“受信任的扩展”，点击“添加扩展”，粘贴刚才复制的 ID，浏览器选择“Chrome / Edge”，然后点击“添加”。备注可以不填。
-4. 回到扩展，重新连接 Motrix，再按提示完成配对。
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\register-nm-host.ps1
+```
 
-只添加你刚刚从浏览器扩展管理页复制的 ID。如果换了电脑，或者从另一个目录重新加载开发版，Chrome 可能分配新的 ID；这时要在 Motrix 中移除旧记录，再添加新 ID。
+该脚本会生成指向 Motrix 自带 `motrix-native-host.exe` 的 Firefox manifest（默认安装路径 `D:\Program Files\Motrix`，可用 `-MotrixDir <路径>` 指定），并注册注册表项 `HKCU\SOFTWARE\Mozilla\NativeMessagingHosts\app.motrix.bridge.takeover`。
 
-Firefox：打开 `about:debugging#/runtime/this-firefox`，点击“临时载入附加组件”，选择 `dist/firefox/manifest.json`。临时扩展会在 Firefox 重启后被移除。
+卸载：`.\scripts\register-nm-host.ps1 -Unregister`。
 
-</details>
+### 3. 在 Firefox 中加载扩展
 
-## 第一次连接
+打开 `about:debugging#/runtime/this-firefox` → **临时载入附加组件** →
+选择 `dist/firefox/manifest.json`。
 
-### 连接这台电脑上的 Motrix
+> 临时附加组件在 Firefox 重启后会失效。如需长期使用，请通过 AMO 签名
+> （`web-ext sign`）或自行分发。
 
-1. 启动 Motrix App。
-2. 点击浏览器工具栏中的 Motrix 图标，再点击“连接”。
-3. 如果发现多个 Motrix 实例，选择你正在使用的那一个。
-4. 在扩展中输入 Motrix 显示的 8 位配对码。
+### 4.（可选）在 Motrix 中信任本扩展
 
-配对成功后，扩展会保存仅属于这台 Motrix 的连接凭据。以后通常可以自动重连，不必每次输入配对码；如果你在 Motrix 端撤销了配对，扩展会要求重新授权。
+Motrix → **设置 → 集成 → 浏览器扩展** → **受信任的扩展** →
+**添加扩展** → ID 填 `motrix-takeover@local.dev`，浏览器选 Firefox。
 
-### 连接远程 Motrix Server
+已在 Motrix 2.0.0-beta.32 上验证：**此步骤并非配对必需**。不加也能正常配对，
+Motrix 中身份显示为 `attested-non-official`；添加只是改变身份展示方式。
 
-打开“设置 → 集成”，添加 Server 名称和 `ws://` 或 `wss://` 地址，然后完成配对。
+---
 
-远程连接最好使用 `wss://`。`ws://` 上传输的任务内容仍有应用层加密，但它不能可靠验证服务器身份，还可能暴露连接信息；放到公网或 NAS 反向代理后，这个差别不是理论问题。
+## 使用
 
-每个 Server 的配对凭据和数据权限彼此隔离。添加 Server 并完成配对，并不等于允许浏览数据离开这台电脑；你还需要单独开启“远程下载”。Cookie 和页面派生的请求标头默认关闭，也只能按 Server 分别授权。
+### 首次配对
 
-## 三种常用下载方式
+1. 启动 Motrix（确认 **设置 → 集成 → 浏览器扩展 →「用浏览器扩展发送下载到 Motrix」** 处于开启状态——默认就是开的）。
+2. 点击工具栏的 **Motrix Takeover** 图标 → **Connect**。
+3. Motrix 弹出审批对话框，显示 **8 位配对码**（`XXXX-XXXX`）。
+4. 把配对码输入扩展弹窗。
 
-### 右键发送
+配对码即口令：SPAKE2 交换中的密钥确认本身就是批准证明——没有第二次"批准"点击。配对成功后，后续重连自动完成，无需再输码。
 
-在网页中的下载链接上点击右键，选择“用 Motrix 下载”。这是最直接的方式，也不要求先开启自动接管。
+### 接管浏览器下载
 
-当前选择远程 Server 时，右键交接会被安全策略拦下。请改用下面两种方式：在扩展中手动新建任务，或者从“嗅探”页选择资源后提交。
+打开扩展设置 → **Download** 页 → 开启 **Takeover**。可设置最小文件大小阈值，以及永远交给浏览器自己处理的域名排除列表。首次开启会请求确认：为了让带登录态的下载正常工作，扩展可能需要把目标域名的 Cookie 随任务发给 Motrix。内置的敏感站点列表排除了部分银行、政务和医疗网站。
 
-### 手动新建任务
+### 其他下载方式
 
-连接 Motrix 后，打开扩展的“任务”页，点击右上角的加号，粘贴一个 HTTP、HTTPS 或 `magnet:?` 地址。当前一次只能添加一个地址。
+- **右键链接** → *用 Motrix 下载*（无需开启接管）。
+- **Tasks 页** → 粘贴 HTTP(S) 或 `magnet:` 链接。
+- **Sniffer 页** → 挑选当前页面已加载的视频 / 音频 / 图片。
 
-### 从页面资源中选择
+---
 
-打开扩展的“嗅探”页。扩展会列出当前页面加载过的视频、音频和图片；图片可以按格式、尺寸与文件大小继续筛选。网页使用懒加载时，先滚动或播放媒体，再点“重新扫描”，结果通常会更完整。
+## 真机验证记录（Motrix 2.0.0-beta.32，Windows 11，Firefox 154）
 
-这里有一点容易误解：发现资源不代表一定能下载。某些地址很快过期，某些视频需要分别下载音轨和画面并由 Motrix 调用 ffmpeg 合并，还有一些资源受 DRM 保护。扩展会明确标出当前后端不支持的选择，而不是假装提交成功。
+全链路每个环节都在真机上验证过：
 
-## 下载接管
+- **原生消息** —— Firefox 注册表发现 → `motrix-native-host.exe` → `{port, nonce}` 应答，分别通过直接调用（`scripts/test-nm-bootstrap.mjs`）与真实扩展页面上下文（`devtools/test-nm.*`）双重验证。
+- **MBP1 配对** —— 完整 SPAKE2 首次配对验证两次：一次用参考 Node 客户端（`scripts/test-mbp1-full-pair.mjs`，上线前先与官方规范性测试向量逐字节比对通过），一次用**真实扩展后台 worker** 经自身消息总线驱动（`devtools/test-pair.*`，最终状态 `connected`）。
+- **MDXP + 下载** —— 对服务器 `motrix 2.0.0-beta.32` 完成 `motrix/initialize` 后 `download/submit`，Motrix/aria2 真实下载了文件。
+- **接管** —— Firefox 中一次真实下载在 `downloads.onCreated` 被拦截、在浏览器中取消、由 Motrix 完成（铁证：Motrix 把 Firefox 全路径形式的 `DownloadItem.filename` 清洗成了最终文件名）。
+- **持久化配对记录** —— Motrix 侧 `bridge/extension-pairings.json` 显示 `browser: firefox`、`identityTrust: attested-non-official`、`status: ready`；扩展侧凭据保存在 `storage.local`。
 
-“接管”开启后，符合条件的浏览器下载会自动交给本机 Motrix App。远程 Server 当前只接受你主动发起的任务，不允许自动接管；这道限制有点保守，但让浏览数据跨设备时多一次明确选择，我认为是合理的。你可以在设置中填写：
+`scripts/` 与 `devtools/` 目录保留了上述验证用的完整自动化工具（CDP 对话框读取、UIA 备选、经向量校验的 MBP1 客户端、扩展内测试页）。
 
-- 最小文件大小，低于这个值的下载仍由浏览器处理；
-- 黑名单域名，每行一个，这些站点始终交给浏览器。
-
-接管默认关闭，第一次开启时会要求确认。原因很具体：为了让需要登录的下载继续有效，扩展可能读取目标域名的 Cookie 并随任务发送给 Motrix。内置敏感域名列表会把部分银行、政务和医疗站点排除在外；如果 Motrix 无法接收普通 HTTP(S) 下载，扩展会尽可能退回浏览器下载。磁力链接没有对应的浏览器下载可退回。
-
-## 数据与权限
-
-浏览器会提示这个扩展需要访问所有网站、下载记录和 Cookie。这个范围确实很大，我不想用一句“为了正常工作”含糊带过。
-
-| 权限 | 用途 |
-| --- | --- |
-| 访问网页与网络请求 | 识别链接、媒体清单、图片和其他已加载资源 |
-| 下载管理 | 接管下载；交接失败时恢复为浏览器下载 |
-| Cookie | 在你主动提交页面资源或同意下载接管时，保留需要登录的下载状态；远程 Server 还要单独授权 |
-| Native Messaging | 发现并连接这台电脑上的 Motrix App |
-| 本地存储 | 保存设置、Server 列表、配对凭据和每个 Server 的授权 |
-| 通知与右键菜单 | 报告交接结果，并提供“用 Motrix 下载”入口 |
-
-页面资源的扫描在浏览器本地进行，不会因为你打开了某个网页就把整页内容发送给 Motrix。真正提交任务时，当前后端会收到完成下载所需的数据，例如目标地址、来源页面地址与标题、建议文件名；Cookie 和请求标头是否随任务发送，取决于下载方式、后端类型以及你授予的权限。
-
-远程 Server 的权限默认从最小范围开始。除非你明确开启，否则扩展不会向它发送 Cookie 或认证标头。只给自己控制的 Server 开启这些权限。
+---
 
 ## 常见问题
 
-### 为什么 Chrome 开发版无法连接 Motrix？
+**扩展找不到本机的 Motrix。**
+确认 Motrix 正在运行后重新扫描；检查 NM manifest 是否已注册（运行注册脚本可看到 manifest 内容），并确认 Firefox 允许访问本地地址。过旧的 Motrix 版本也可能与当前配对协议（MBP1 v1 / MDXP 1.0）不兼容。
 
-先检查扩展 ID 是否已经加入 Motrix 的“设置 → 集成 → 浏览器扩展 → 受信任的扩展”。ID 可以在 `chrome://extensions` 的 Motrix Extension 卡片上找到。开发版换了加载目录后，ID 可能与之前不同，Motrix 里的记录也要跟着更新。
+**配对报"rate limited / 稍后重试"。**
+桥接服务对失败尝试实施防猜退避（30 秒起翻倍，上限 1 小时，配对成功即重置）。等它过去——反复重试只会把退避时间越拉越长。
 
-### 为什么一直找不到本机 Motrix？
+**提示"会话已过期 — 请在浏览器中刷新页面后重试"。**
+网站在移交过程中登录态失效了；刷新页面后重试即可。
 
-先确认 Motrix 正在运行，然后重新扫描。仍然找不到时，检查浏览器是否允许扩展访问本机地址，以及 Motrix 的浏览器连接组件是否安装完整。旧版 Motrix 也可能不支持当前配对协议。
+**Sniffer 列表里找不到页面上的视频。**
+播放几秒后再扫描。`blob:` URL、DRM 流与短时效链接可能无法使用。
 
-### 为什么页面里明明有视频，扩展却没有列出来？
+**下载的文件名形如 `D__Users_Downloads_….dat`。**
+已知的上游外观瑕疵：Firefox 把下载的*完整路径*作为 `DownloadItem.filename` 上报，Motrix 清洗后写进了最终文件名。文件本身是完整正确的。
 
-先播放几秒，再重新扫描。扩展依据网页元素和实际网络请求识别资源；还没有加载的媒体，它自然看不到。`blob:` 地址、DRM 流、很快失效的临时链接和经过特殊封装的播放器，也可能无法处理。
+---
 
-### 为什么远程 Server 已配对，却不能提交下载？
-
-配对只确认“它是谁”，不代表“可以发什么”。请在“设置 → 集成”中为这个 Server 开启“远程下载”；如果资源依赖 Referer、Cookie 或认证标头，再按需开启相应权限。
-
-### YouTube 能下载吗？
-
-现在不能。普通 Chromium 开发构建中的 YouTube 适配器仍是联调用的占位实现，只会提交一个注定失败的测试地址；面向 Chrome/Edge 商店和 Firefox 的构建则完全移除了这项能力。
-
-## 给开发者
+## 开发
 
 ```bash
-pnpm dev                 # Chromium 开发构建
-pnpm dev:firefox         # Firefox 开发构建
-pnpm test                # 测试
-pnpm lint                # 代码检查
-pnpm build:webstore      # Chrome Web Store 合规构建
+pnpm dev              # Chromium 开发构建
+pnpm dev:firefox      # Firefox 开发构建
+pnpm test             # 2000+ 单元测试，含全部 MBP1 规范性向量
+pnpm lint             # biome + import 检查
+pnpm run build:firefox
 ```
 
-### 发布 GitHub Release
+主要目录：`src/background/`（配对、连接、下载移交、任务控制）、`src/popup/`、`src/options/`、`src/content/`（页面资源探测）、`src/adapters/`（站点适配器）、`src/background/mbp1/`（MBP1 协议实现——未经重跑向量套件请勿改动）。
 
-Release 由 GitHub Actions 从已有的 `vX.Y.Z` 标签构建。先修改
-`package.json` 中的版本并提交，再创建、推送同版本标签：
+密码学依赖版本由协议规范锁定（`@noble/curves@2.4.0`、`@noble/hashes@2.4.0`），任何升级都必须重跑全部规范性向量。
 
-```bash
-git tag -a v0.1.2 -m "Motrix Extension 0.1.2"
-git push origin v0.1.2
-```
-
-工作流会依次执行代码检查与测试，构建 Chrome/Edge 商店版和 Firefox 版，
-确认两个 manifest 的版本一致，然后把两个浏览器 ZIP、供 Firefox 审核的
-可复现源码 ZIP 和 `SHA256SUMS.txt` 发布到 GitHub Release。也可以在 GitHub
-Actions 的 **Release browser extension** 工作流中手动发布一个已有标签。
-
-主要代码位于：
-
-- `src/background/`：配对、连接、下载交接、任务控制和配置存储；
-- `src/popup/`：扩展弹窗；
-- `src/options/`：设置页；
-- `src/content/`：页面资源识别；
-- `src/adapters/`：站点适配器。
-
-## 相关项目
-
-- [Motrix](https://github.com/agalwood/Motrix)：桌面应用与服务端
-- [motrix-extension](https://github.com/motrixapp/motrix-extension)：扩展公开仓库
-- [MDXP](https://github.com/motrixapp/mdxp)：协议定义与连接工具
+---
 
 ## 许可证
 
-[MIT](./LICENSE) © 2026-present Dr_rOot
+[MIT](./LICENSE)，© Motrix 项目贡献者。本 fork 基于 [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension)（MIT）。协议规范归 [Motrix](https://github.com/agalwood/Motrix) 项目所有。

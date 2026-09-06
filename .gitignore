@@ -73,3 +73,6 @@ Desktop.ini
 
 # Repository-local worktrees
 /.worktrees/
+
+# Local-only pnpm config (machine-specific store paths)
+.npmrc
