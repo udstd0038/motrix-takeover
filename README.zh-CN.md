@@ -52,6 +52,16 @@
 
 ---
 
+## 发行版（Releases）
+
+预构建、**经 Mozilla 签名**的安装包发布在 [Releases](https://github.com/udstd0038/motrix-takeover/releases) 页面，可直接安装到普通版 Firefox：
+
+1. 从最新 Release 下载 `motrix-takeover-<版本>-signed.xpi`；
+2. 用 Firefox 打开该文件（或拖进 Firefox 窗口，或在 **about:addons → 齿轮 → 从文件安装附加组件** 中选择它）；
+3. 在权限提示中点击 **添加**。
+
+安装后请完成 [原生消息宿主注册](#安装) 与 [首次配对](#首次配对)。每个 Release 都附带 `SHA256SUMS.txt` 校验和文件。
+
 ## 环境要求
 
 - **Firefox** 142+（桌面版）。

@@ -52,6 +52,16 @@ The security properties (fake-server resistance, replay protection, strict seque
 
 ---
 
+## Releases
+
+Pre-built, **Mozilla-signed** packages are published on the [Releases](https://github.com/udstd0038/motrix-takeover/releases) page. To install directly into release Firefox:
+
+1. Download `motrix-takeover-<version>-signed.xpi` from the latest release.
+2. Open it with Firefox (or drag it onto a Firefox window, or use **about:addons → gear → Install Add-on From File**).
+3. Click **Add** in the permission prompt.
+
+After installation, complete the [native-messaging registration](#installation) and [first pairing](#first-pairing). A `SHA256SUMS.txt` file is published alongside every release.
+
 ## Requirements
 
 - **Firefox** 142 or later (desktop).
