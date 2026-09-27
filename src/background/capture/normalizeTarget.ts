@@ -5,7 +5,13 @@ function basename(s: string): string {
   // Drop empty segments so a trailing slash (e.g. bilibili watch links of the
   // form /video/BVxxx/) yields the last real segment ("BVxxx") instead of ''.
   // An empty name falls through to a meaningless "(1)" filename downstream.
-  const parts = noQuery.split('/').filter(Boolean)
+  //
+  // Split on BOTH path separators: URL basenames use `/`, while Firefox's
+  // downloads.DownloadItem.filename is an absolute Windows path
+  // (e.g. `D:\Users\Desktop\file.zip`). Without the `\` split, the whole
+  // path was forwarded as the suggested filename and Motrix sanitized the
+  // illegal characters into `D__Users_Desktop_file.zip`.
+  const parts = noQuery.split(/[\\/]/).filter(Boolean)
   return parts[parts.length - 1] ?? ''
 }
 

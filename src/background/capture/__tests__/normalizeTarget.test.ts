@@ -68,4 +68,34 @@ describe('normalizeTarget', () => {
     })
     expect(t.suggestedFilename).toBe('BV14vJg6ZEd4')
   })
+
+  it('keeps only the basename of a Firefox Windows absolute-path filename', () => {
+    // Regression: Firefox reports DownloadItem.filename as an absolute path
+    // (D:\Users\Desktop\file.zip). Forwarding it whole made Motrix sanitize
+    // the `:` and `\` into `D__Users_Desktop_file.zip`.
+    const t = normalizeTarget({
+      url: 'https://cdn.example.com/file.zip',
+      suggestedFilename: 'D:\\Users\\Desktop\\file.zip',
+      origin: 'auto',
+    })
+    expect(t.suggestedFilename).toBe('file.zip')
+  })
+
+  it('keeps the original (possibly spaced/unicode) name from a Windows path', () => {
+    const t = normalizeTarget({
+      url: 'https://cdn.example.com/report.pdf',
+      suggestedFilename: 'D:\\Users\\Desktop\\季度报告 (1).pdf',
+      origin: 'auto',
+    })
+    expect(t.suggestedFilename).toBe('季度报告 (1).pdf')
+  })
+
+  it('handles forward-slash absolute paths (macOS/Linux Firefox) the same way', () => {
+    const t = normalizeTarget({
+      url: 'https://cdn.example.com/a.bin',
+      suggestedFilename: '/home/user/Downloads/a.bin',
+      origin: 'auto',
+    })
+    expect(t.suggestedFilename).toBe('a.bin')
+  })
 })
