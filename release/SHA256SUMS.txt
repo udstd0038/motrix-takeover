@@ -1,2 +1,2 @@
-48bc45ec25b257435e04e6de31ab2dd064bce86134cfccd168cf4cfe0afe3525  motrix-takeover-0.2.0-signed.xpi
-eeecb17b3f9910db39991f7c0f58c694d522577debdc0c37f2469146e2558a40  motrix_takeover-0.2.0.zip
+0d993998468bc5696dfc790abe5ee8d2254b1c72674f6e03e637c4553e30e0cc  motrix-takeover-0.2.1-signed.xpi
+2a04365860ca616ffad156934026dcf5adebdafca1f1214c9c2a86f8b8a02689  motrix_takeover-0.2.1.zip

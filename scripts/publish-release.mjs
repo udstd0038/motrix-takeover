@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const OWNER = 'udstd0038';
 const REPO = 'motrix-takeover';
-const TAG = 'v0.2.0';
+const TAG = 'v0.2.1';
 const TOKEN = process.env.GH_TOKEN;
 if (!TOKEN) { console.log('NO_TOKEN'); process.exit(2); }
 
@@ -33,13 +33,13 @@ const apiHeaders = {
   'Content-Type': 'application/json',
 };
 
-const BODY = `## Motrix Takeover 0.2.0 — first community release
+const BODY = `## Motrix Takeover 0.2.1
 
 Community fork of [motrixapp/motrix-extension](https://github.com/motrixapp/motrix-extension) that hands Firefox downloads to [Motrix](https://motrix.app) (verified against Motrix 2.0.0-beta.32). This build is **signed by Mozilla (AMO, unlisted channel)** and installs directly into release Firefox.
 
 ### Install
 
-1. Download \`motrix-takeover-0.2.0-signed.xpi\`.
+1. Download \`motrix-takeover-0.2.1-signed.xpi\`.
 2. Open it with Firefox (or drag it onto a Firefox window, or use **about:addons → gear → Install Add-on From File**).
 3. Click **Add** in the permission prompt.
 
@@ -47,8 +47,8 @@ Then follow the [README](https://github.com/udstd0038/motrix-takeover#installati
 
 ### Files
 
-- \`motrix-takeover-0.2.0-signed.xpi\` — signed package, install this one
-- \`motrix_takeover-0.2.0.zip\` — unsigned build artifact (for inspection / AMO source review)
+- \`motrix-takeover-0.2.1-signed.xpi\` — signed package, install this one
+- \`motrix_takeover-0.2.1.zip\` — unsigned build artifact (for inspection / AMO source review)
 - \`SHA256SUMS.txt\` — checksums of the two packages
 
 ### Verified end-to-end
@@ -60,7 +60,7 @@ License: MIT (based on motrixapp/motrix-extension). Not affiliated with the offi
 (async () => {
   // 1. Create the release
   const create = await request('api.github.com', 'POST', `/repos/${OWNER}/${REPO}/releases`, apiHeaders,
-    JSON.stringify({ tag_name: TAG, name: 'Motrix Takeover 0.2.0', body: BODY, draft: false, prerelease: false }));
+    JSON.stringify({ tag_name: TAG, name: 'Motrix Takeover 0.2.1', body: BODY, draft: false, prerelease: false }));
   console.log('create:', create.status);
   if (![201].includes(create.status)) { console.log(create.text.slice(0, 400)); process.exit(3); }
   const rel = JSON.parse(create.text);
@@ -68,8 +68,8 @@ License: MIT (based on motrixapp/motrix-extension). Not affiliated with the offi
 
   // 2. Upload assets
   const assets = [
-    'release/motrix-takeover-0.2.0-signed.xpi',
-    'release/motrix_takeover-0.2.0.zip',
+    'release/motrix-takeover-0.2.1-signed.xpi',
+    'release/motrix_takeover-0.2.1.zip',
     'release/SHA256SUMS.txt',
   ];
   for (const file of assets) {
